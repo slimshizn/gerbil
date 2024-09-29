@@ -12,6 +12,4 @@ services:
       - 51820:51820/udp
     volumes:
       - ./config_example.json:/config/config.json
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
     restart: unless-stopped

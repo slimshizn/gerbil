@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /gerbil
 # Start a new stage from scratch
 FROM ubuntu:22.04 AS runner
 
-RUN apt-get update && apt-get install -y nftables && apt-get clean
+RUN apt-get update && apt-get install -y nftables iproute2 wireguard && apt-get clean
 
 WORKDIR /root/
 
