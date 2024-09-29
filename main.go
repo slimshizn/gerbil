@@ -19,7 +19,7 @@ import (
 
 var (
 	interfaceName = "wg0"
-	listenAddr    = ":8080"
+	listenAddr    = ":3002"
 )
 
 type WgConfig struct {
@@ -52,7 +52,7 @@ func main() {
 	interfaceNameArg := flag.String("interface", "wg0", "Name of the WireGuard interface")
 	configFile := flag.String("config", "", "Path to local configuration file")
 	remoteConfigURL := flag.String("remoteConfig", "", "URL to fetch remote configuration")
-	listenAddrArg := flag.String("listen", ":8080", "Address to listen on")
+	listenAddrArg := flag.String("listen", ":3002", "Address to listen on")
 	reportBandwidthTo := flag.String("reportBandwidthTo", "", "Address to listen on")
 	flag.Parse()
 

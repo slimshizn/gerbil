@@ -1,4 +1,4 @@
-FROM golang:1.21.5-alpine AS build
+FROM golang:1.21.5-alpine AS builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -16,14 +16,14 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /gerbil
 
 # Start a new stage from scratch
-FROM ubuntu:22:04  
+FROM ubuntu:22.04 AS runner
 
-RUN RUN apt-get update && apt-get install -y nftables && apt-get clean
+RUN apt-get update && apt-get install -y nftables && apt-get clean
 
 WORKDIR /root/
 
 # Copy the pre-built binary file from the previous stage
-COPY --from=build /gerbil .
+COPY --from=builder /gerbil .
 
 # Command to run the executable
 CMD ["./gerbil"]
