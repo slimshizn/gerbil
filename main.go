@@ -399,7 +399,7 @@ func periodicBandwidthCheck(endpoint string) {
 	}
 }
 
-func calculatePeerBandwidth() ([]PeerBandwidth, error) {
+func calculatePeerBandwidth() ([]PeerBandwidth, error) { //TODO: fix this to actually only report the change in bandwidth from the last query
 	device, err := wgClient.Device(interfaceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device: %v", err)

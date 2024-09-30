@@ -18,12 +18,16 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /gerbil
 # Start a new stage from scratch
 FROM ubuntu:22.04 AS runner
 
-RUN apt-get update && apt-get install -y nftables iproute2 wireguard && apt-get clean
+RUN apt-get update && apt-get install -y nftables && apt-get clean
 
-WORKDIR /root/
+# Copy the pre-built binary file from the previous stage and the entrypoint script
+COPY --from=builder /gerbil /usr/local/bin/
+COPY entrypoint.sh /
 
-# Copy the pre-built binary file from the previous stage
-COPY --from=builder /gerbil .
+RUN chmod +x /entrypoint.sh
+
+# Copy the entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Command to run the executable
-CMD ["./gerbil"]
+CMD ["gerbil"]
