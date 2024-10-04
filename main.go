@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/vishvananda/netlink"
@@ -20,6 +21,8 @@ import (
 var (
 	interfaceName = "wg0"
 	listenAddr    = ":3002"
+	lastReadings  = make(map[string]PeerReading)
+	mu            sync.Mutex
 )
 
 type WgConfig struct {
@@ -38,6 +41,12 @@ type PeerBandwidth struct {
 	PublicKey string  `json:"publicKey"`
 	BytesIn   float64 `json:"bytesIn"`
 	BytesOut  float64 `json:"bytesOut"`
+}
+
+type PeerReading struct {
+	BytesReceived    int64
+	BytesTransmitted int64
+	LastChecked      time.Time
 }
 
 var (
@@ -399,53 +408,62 @@ func periodicBandwidthCheck(endpoint string) {
 	}
 }
 
-func calculatePeerBandwidth() ([]PeerBandwidth, error) { //TODO: fix this to actually only report the change in bandwidth from the last query
+func calculatePeerBandwidth() ([]PeerBandwidth, error) {
 	device, err := wgClient.Device(interfaceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device: %v", err)
 	}
 
 	peerBandwidths := []PeerBandwidth{}
+	now := time.Now()
+
+	mu.Lock()
+	defer mu.Unlock()
 
 	for _, peer := range device.Peers {
-		// Store initial values
-		initialBytesReceived := peer.ReceiveBytes
-		initialBytesSent := peer.TransmitBytes
+		publicKey := peer.PublicKey.String()
 
-		// Wait for a short period to measure change
-		time.Sleep(5 * time.Second)
-
-		// Get updated device info
-		updatedDevice, err := wgClient.Device(interfaceName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get updated device: %v", err)
+		lastReading, exists := lastReadings[publicKey]
+		currentReading := PeerReading{
+			BytesReceived:    peer.ReceiveBytes,
+			BytesTransmitted: peer.TransmitBytes,
+			LastChecked:      now,
 		}
 
-		var updatedPeer *wgtypes.Peer
-		for _, p := range updatedDevice.Peers {
-			if p.PublicKey == peer.PublicKey {
-				updatedPeer = &p
-				break
-			}
+		var bytesInDiff, bytesOutDiff float64
+
+		if exists {
+			timeDiff := now.Sub(lastReading.LastChecked).Seconds()
+			bytesInDiff = float64(currentReading.BytesReceived-lastReading.BytesReceived) / timeDiff
+			bytesOutDiff = float64(currentReading.BytesTransmitted-lastReading.BytesTransmitted) / timeDiff
 		}
 
-		if updatedPeer == nil {
-			continue
-		}
-
-		// Calculate change in bytes
-		bytesInDiff := float64(updatedPeer.ReceiveBytes - initialBytesReceived)
-		bytesOutDiff := float64(updatedPeer.TransmitBytes - initialBytesSent)
-
-		// Convert to MB
+		// Convert to MB/s
 		bytesInMB := bytesInDiff / (1024 * 1024)
 		bytesOutMB := bytesOutDiff / (1024 * 1024)
 
 		peerBandwidths = append(peerBandwidths, PeerBandwidth{
-			PublicKey: peer.PublicKey.String(),
+			PublicKey: publicKey,
 			BytesIn:   bytesInMB,
 			BytesOut:  bytesOutMB,
 		})
+
+		// Update the last reading
+		lastReadings[publicKey] = currentReading
+	}
+
+	// Clean up old peers
+	for publicKey := range lastReadings {
+		found := false
+		for _, peer := range device.Peers {
+			if peer.PublicKey.String() == publicKey {
+				found = true
+				break
+			}
+		}
+		if !found {
+			delete(lastReadings, publicKey)
+		}
 	}
 
 	return peerBandwidths, nil
