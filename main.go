@@ -63,6 +63,8 @@ func main() {
 	remoteConfigURL := flag.String("remoteConfig", "", "URL to fetch remote configuration")
 	listenAddrArg := flag.String("listen", ":3002", "Address to listen on")
 	reportBandwidthTo := flag.String("reportBandwidthTo", "", "Address to listen on")
+	generateAndSaveKeyTo := flag.String("generateAndSaveKeyTo", "", "Path to save generated private key")
+	reachableAt := flag.String("reachableAt", "", "Endpoint of the http server to tell remote config about")
 	flag.Parse()
 
 	if *interfaceNameArg != "" {
@@ -77,22 +79,63 @@ func main() {
 		log.Fatal("Please provide either --config or --remoteConfig, but not both")
 	}
 
+	var key wgtypes.Key
+	// if generateAndSaveKeyTo is provided, generate a private key and save it to the file. if the file already exists, load the key from the file
+	if *generateAndSaveKeyTo != "" {
+		if _, err := os.Stat(*generateAndSaveKeyTo); os.IsNotExist(err) {
+			// generate a new private key
+			key, err = wgtypes.GeneratePrivateKey()
+			if err != nil {
+				log.Fatalf("Failed to generate private key: %v", err)
+			}
+			// save the key to the file
+			err = os.WriteFile(*generateAndSaveKeyTo, []byte(key.String()), 0644)
+			if err != nil {
+				log.Fatalf("Failed to save private key: %v", err)
+			}
+		} else {
+			keyData, err := os.ReadFile(*generateAndSaveKeyTo)
+			if err != nil {
+				log.Fatalf("Failed to read private key: %v", err)
+			}
+			key, err = wgtypes.ParseKey(string(keyData))
+			if err != nil {
+				log.Fatalf("Failed to parse private key: %v", err)
+			}
+		}
+	} else {
+		// if no generateAndSaveKeyTo is provided, ensure that the private key is provided
+		if wgconfig.PrivateKey == "" {
+			// generate a new one
+			key, err = wgtypes.GeneratePrivateKey()
+			if err != nil {
+				log.Fatalf("Failed to generate private key: %v", err)
+			}
+		}
+	}
+
+	// Load configuration based on provided argument
+	if *configFile != "" {
+		wgconfig, err = loadConfig(*configFile)
+		if err != nil {
+			log.Fatalf("Failed to load configuration: %v", err)
+		}
+		if wgconfig.PrivateKey == "" {
+			wgconfig.PrivateKey = key.String()
+		}
+	} else {
+		wgconfig, err = loadRemoteConfig(*remoteConfigURL, key, *reachableAt)
+		if err != nil {
+			log.Fatalf("Failed to load configuration: %v", err)
+		}
+		wgconfig.PrivateKey = key.String()
+	}
+
 	wgClient, err = wgctrl.New()
 	if err != nil {
 		log.Fatalf("Failed to create WireGuard client: %v", err)
 	}
 	defer wgClient.Close()
-
-	// Load configuration based on provided argument
-	if *configFile != "" {
-		wgconfig, err = loadConfig(*configFile)
-	} else {
-		wgconfig, err = loadRemoteConfig(*remoteConfigURL)
-	}
-
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
 
 	// Ensure the WireGuard interface exists and is configured
 	if err := ensureWireguardInterface(wgconfig); err != nil {
@@ -111,9 +154,17 @@ func main() {
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
 
-func loadRemoteConfig(url string) (WgConfig, error) {
-	resp, err := http.Get(url)
+func loadRemoteConfig(url string, key wgtypes.Key, reachableAt string) (WgConfig, error) {
+	var body *bytes.Buffer
+	if reachableAt == "" {
+		body = bytes.NewBuffer([]byte(fmt.Sprintf(`{"publicKey": "%s"}`, key.PublicKey().String())))
+	} else {
+		body = bytes.NewBuffer([]byte(fmt.Sprintf(`{"publicKey": "%s", "reachableAt": "%s"}`, key.PublicKey().String(), reachableAt)))
+	}
+	resp, err := http.Post(url, "application/json", body)
 	if err != nil {
+		// print the error
+		fmt.Println("Error fetching remote config:", err)
 		return WgConfig{}, err
 	}
 	defer resp.Body.Close()
@@ -125,6 +176,7 @@ func loadRemoteConfig(url string) (WgConfig, error) {
 
 	var config WgConfig
 	err = json.Unmarshal(data, &config)
+
 	return config, err
 }
 
@@ -433,12 +485,16 @@ func calculatePeerBandwidth() ([]PeerBandwidth, error) {
 		var bytesInDiff, bytesOutDiff float64
 
 		if exists {
-			timeDiff := now.Sub(lastReading.LastChecked).Seconds()
-			bytesInDiff = float64(currentReading.BytesReceived-lastReading.BytesReceived) / timeDiff
-			bytesOutDiff = float64(currentReading.BytesTransmitted-lastReading.BytesTransmitted) / timeDiff
+			// Calculate total bytes transferred since last reading
+			bytesInDiff = float64(currentReading.BytesReceived - lastReading.BytesReceived)
+			bytesOutDiff = float64(currentReading.BytesTransmitted - lastReading.BytesTransmitted)
+		} else {
+			// For first reading, use total bytes as the increment
+			bytesInDiff = float64(currentReading.BytesReceived)
+			bytesOutDiff = float64(currentReading.BytesTransmitted)
 		}
 
-		// Convert to MB/s
+		// Convert to MB
 		bytesInMB := bytesInDiff / (1024 * 1024)
 		bytesOutMB := bytesOutDiff / (1024 * 1024)
 
