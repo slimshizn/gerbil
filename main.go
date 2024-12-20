@@ -497,8 +497,6 @@ func calculatePeerBandwidth() ([]PeerBandwidth, error) {
 
 	for _, peer := range device.Peers {
 		publicKey := peer.PublicKey.String()
-
-		lastReading, exists := lastReadings[publicKey]
 		currentReading := PeerReading{
 			BytesReceived:    peer.ReceiveBytes,
 			BytesTransmitted: peer.TransmitBytes,
@@ -506,26 +504,48 @@ func calculatePeerBandwidth() ([]PeerBandwidth, error) {
 		}
 
 		var bytesInDiff, bytesOutDiff float64
+		lastReading, exists := lastReadings[publicKey]
 
 		if exists {
-			// Calculate total bytes transferred since last reading
-			bytesInDiff = float64(currentReading.BytesReceived - lastReading.BytesReceived)
-			bytesOutDiff = float64(currentReading.BytesTransmitted - lastReading.BytesTransmitted)
+			timeDiff := currentReading.LastChecked.Sub(lastReading.LastChecked).Seconds()
+			if timeDiff > 0 {
+				// Calculate bytes transferred since last reading
+				bytesInDiff = float64(currentReading.BytesReceived - lastReading.BytesReceived)
+				bytesOutDiff = float64(currentReading.BytesTransmitted - lastReading.BytesTransmitted)
+
+				// Handle counter wraparound (if the counter resets or overflows)
+				if bytesInDiff < 0 {
+					bytesInDiff = float64(currentReading.BytesReceived)
+				}
+				if bytesOutDiff < 0 {
+					bytesOutDiff = float64(currentReading.BytesTransmitted)
+				}
+
+				// Convert to MB
+				bytesInMB := bytesInDiff / (1024 * 1024)
+				bytesOutMB := bytesOutDiff / (1024 * 1024)
+
+				peerBandwidths = append(peerBandwidths, PeerBandwidth{
+					PublicKey: publicKey,
+					BytesIn:   bytesInMB,
+					BytesOut:  bytesOutMB,
+				})
+			} else {
+				// If readings are too close together or time hasn't passed, report 0
+				peerBandwidths = append(peerBandwidths, PeerBandwidth{
+					PublicKey: publicKey,
+					BytesIn:   0,
+					BytesOut:  0,
+				})
+			}
 		} else {
-			// For first reading, use total bytes as the increment
-			bytesInDiff = float64(currentReading.BytesReceived)
-			bytesOutDiff = float64(currentReading.BytesTransmitted)
+			// For first reading of a peer, report 0 to establish baseline
+			peerBandwidths = append(peerBandwidths, PeerBandwidth{
+				PublicKey: publicKey,
+				BytesIn:   0,
+				BytesOut:  0,
+			})
 		}
-
-		// Convert to MB
-		bytesInMB := bytesInDiff / (1024 * 1024)
-		bytesOutMB := bytesOutDiff / (1024 * 1024)
-
-		peerBandwidths = append(peerBandwidths, PeerBandwidth{
-			PublicKey: publicKey,
-			BytesIn:   bytesInMB,
-			BytesOut:  bytesOutMB,
-		})
 
 		// Update the last reading
 		lastReadings[publicKey] = currentReading
@@ -558,6 +578,8 @@ func reportPeerBandwidth(apiURL string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal bandwidth data: %v", err)
 	}
+
+	logger.Info("Reporting bandwidth data: %s", string(jsonData))
 
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
