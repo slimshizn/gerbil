@@ -21,7 +21,7 @@ import (
 
 var (
 	interfaceName = "wg0"
-	listenAddr    = ":3002"
+	listenAddr    = ":3003"
 	lastReadings  = make(map[string]PeerReading)
 	mu            sync.Mutex
 )
@@ -79,7 +79,7 @@ func main() {
 	interfaceNameArg := flag.String("interface", "wg0", "Name of the WireGuard interface")
 	configFile := flag.String("config", "", "Path to local configuration file")
 	remoteConfigURL := flag.String("remoteConfig", "", "URL to fetch remote configuration")
-	listenAddrArg := flag.String("listen", ":3002", "Address to listen on")
+	listenAddrArg := flag.String("listen", ":3003", "Address to listen on")
 	reportBandwidthTo := flag.String("reportBandwidthTo", "", "Address to listen on")
 	generateAndSaveKeyTo := flag.String("generateAndSaveKeyTo", "", "Path to save generated private key")
 	reachableAt := flag.String("reachableAt", "", "Endpoint of the http server to tell remote config about")
@@ -579,7 +579,7 @@ func reportPeerBandwidth(apiURL string) error {
 		return fmt.Errorf("failed to marshal bandwidth data: %v", err)
 	}
 
-	logger.Info("Reporting bandwidth data: %s", string(jsonData))
+	logger.Debug("Reporting bandwidth data: %s", string(jsonData))
 
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {

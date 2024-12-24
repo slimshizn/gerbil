@@ -1,7 +1,8 @@
 module github.com/fosrl/gerbil
 
-go 1.21.5
+go 1.23.1
 
+toolchain go1.23.2
 require (
 	github.com/vishvananda/netlink v1.3.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
