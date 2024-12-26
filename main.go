@@ -579,8 +579,6 @@ func reportPeerBandwidth(apiURL string) error {
 		return fmt.Errorf("failed to marshal bandwidth data: %v", err)
 	}
 
-	logger.Debug("Reporting bandwidth data: %s", string(jsonData))
-
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to send bandwidth data: %v", err)
