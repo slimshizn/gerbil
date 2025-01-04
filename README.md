@@ -50,7 +50,7 @@ Example:
 --reachableAt=http://gerbil:3003 \
 --generateAndSaveKeyTo=/var/config/key \
 --remoteConfig=http://pangolin:3001/api/v1/gerbil/get-config \
---reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth \
+--reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth
 ```
 
 Note: CLI args can be passed as "command" fields when using the Docker container.
