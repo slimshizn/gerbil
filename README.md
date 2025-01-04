@@ -53,7 +53,25 @@ Example:
 --reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth
 ```
 
-Note: CLI args can be passed as "command" fields when using the Docker container.
+```yaml
+services:
+  gerbil:
+    image: fosrl/gerbil
+    container_name: gerbil
+    restart: unless-stopped
+    command:
+      - --reachableAt=http://gerbil:3003
+      - --generateAndSaveKeyTo=/var/config/key
+      - --remoteConfig=http://pangolin:3001/api/v1/gerbil/get-config
+      - --reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth
+    volumes:
+      - ./config/:/var/config
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    ports:
+      - 51820:51820/udp
+```
 
 ## Build
 
