@@ -1,6 +1,12 @@
 ## Contributing
 
-Contributions are welcome! Please see the following page in our documentation with future plans and feature ideas if you are looking for a place to start.
+Contributions are welcome! 
+
+Please see the contribution and local development guide on the docs page before getting started:
+
+https://docs.fossorial.io/development
+
+For ideas about what features to work on and our future plans, please see the roadmap:
 
 https://docs.fossorial.io/roadmap
 
