@@ -4,7 +4,7 @@ Gerbil is a simple [WireGuard](https://www.wireguard.com/) interface management 
 
 ### Installation and Documentation
 
-Gerbil can be used stand alone with your own API, a static JSON file, or with Pangolin and Newt as part of the larger system. See documentation below:
+Gerbil can be used standalone with your own API, a static JSON file, or with Pangolin and Newt as part of the larger system. See documentation below:
 
 -   [Installation Instructions](https://docs.fossorial.io)
 -   [Full Documentation](https://docs.fossorial.io)
@@ -19,7 +19,7 @@ _Sample output of a Gerbil container connected to Pangolin and terminating vario
 
 ### Setup WireGuard
 
-A WireGuard interface will be created and configured on the local Linux machine or in the Docker container according to the values given in either a JSON config file or via the remote server. If the interface already exists it will be reconfigured.
+A WireGuard interface will be created and configured on the local Linux machine or in the Docker container according to the values given in either a JSON config file or via the remote server. If the interface already exists, it will be reconfigured.
 
 ### Manage Peers
 
@@ -27,7 +27,7 @@ Gerbil will create the peers defined in the config on the WireGuard interface. T
 
 ### Report Bandwidth
 
-Bytes transmitted in and out of each peer is collected every 10 seconds and incremental usage is reported via the "reportBandwidthTo" endpoint. This can be used to track data usage of each peer on the remote server.
+Bytes transmitted in and out of each peer are collected every 10 seconds, and incremental usage is reported via the "reportBandwidthTo" endpoint. This can be used to track data usage of each peer on the remote server.
 
 ## CLI Args
 
