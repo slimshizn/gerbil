@@ -23,7 +23,7 @@ import (
 var (
 	interfaceName = "wg0"
 	listenAddr    = ":3003"
-	mtu           = 1420
+	mtuInt        = 1420
 	lastReadings  = make(map[string]PeerReading)
 	mu            sync.Mutex
 )
@@ -79,7 +79,7 @@ func main() {
 
 	// Define command line flags
 	interfaceNameArg := flag.String("interface", "wg0", "Name of the WireGuard interface")
-	mtuRead := flag.String("mtu", "1280", "MTU of the interface")
+	mtu := flag.String("mtu", "1280", "MTU of the interface")
 	configFile := flag.String("config", "", "Path to local configuration file")
 	remoteConfigURL := flag.String("remoteConfig", "", "URL to fetch remote configuration")
 	listenAddrArg := flag.String("listen", ":3003", "Address to listen on")
@@ -100,7 +100,7 @@ func main() {
 		listenAddr = *listenAddrArg
 	}
 
-	mtu, err = strconv.Atoi(*mtuRead)
+	mtuInt, err = strconv.Atoi(*mtu)
 	if err != nil {
 		logger.Fatal("Failed to parse MTU: %v", err)
 	}
@@ -297,7 +297,7 @@ func ensureWireguardInterface(wgconfig WgConfig) error {
 		return fmt.Errorf("failed to get interface: %v", err)
 	}
 
-	if err := netlink.LinkSetMTU(link, mtu); err != nil {
+	if err := netlink.LinkSetMTU(link, mtuInt); err != nil {
 		return fmt.Errorf("failed to set MTU: %v", err)
 	}
 
