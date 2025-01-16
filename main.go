@@ -133,9 +133,14 @@ func main() {
 		logger.Fatal("Failed to parse MTU: %v", err)
 	}
 
-	// Validate that only one config option is provided
-	if (configFile != "" && remoteConfigURL != "") || (configFile == "" && remoteConfigURL == "") {
-		logger.Fatal("Please provide either --config or --remoteConfig, but not both")
+	// are they missing either the config file or the remote config URL?
+	if configFile == "" && remoteConfigURL == "" {
+		logger.Fatal("You must provide either a config file or a remote config URL")
+	}
+
+	// do they have both the config file and the remote config URL?
+	if configFile != "" && remoteConfigURL != "" {
+		logger.Fatal("You must provide either a config file or a remote config URL, not both")
 	}
 
 	var key wgtypes.Key
