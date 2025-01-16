@@ -121,7 +121,7 @@ func main() {
 		flag.StringVar(&logLevel, "log-level", "INFO", "Log level (DEBUG, INFO, WARN, ERROR, FATAL)")
 	}
 	if mtu == "" {
-		flag.StringVar(&mtu, "mtu", "1420", "MTU of the WireGuard interface")
+		flag.StringVar(&mtu, "mtu", "1280", "MTU of the WireGuard interface")
 	}
 	flag.Parse()
 
