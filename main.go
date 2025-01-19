@@ -189,11 +189,17 @@ func main() {
 			wgconfig.PrivateKey = key.String()
 		}
 	} else {
-		wgconfig, err = loadRemoteConfig(remoteConfigURL, key, reachableAt)
-		if err != nil {
-			logger.Fatal("Failed to load configuration: %v", err)
+		// loop until we get the config
+		for wgconfig.PrivateKey == "" {
+			logger.Info("Fetching remote config from %s", remoteConfigURL)
+			wgconfig, err = loadRemoteConfig(remoteConfigURL, key, reachableAt)
+			if err != nil {
+				logger.Error("Failed to load configuration: %v", err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			wgconfig.PrivateKey = key.String()
 		}
-		wgconfig.PrivateKey = key.String()
 	}
 
 	wgClient, err = wgctrl.New()
