@@ -21,7 +21,11 @@ test:
 local: 
 	 CGO_ENABLED=0 GOOS=linux go build -o gerbil
 
+<<<<<<< HEAD
 go-build-release:
+=======
+release:
+>>>>>>> bab8630756f5b243feec8a9e8952086498808a11
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/gerbil_linux_arm64
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/gerbil_linux_amd64
 
