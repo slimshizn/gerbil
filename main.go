@@ -128,11 +128,6 @@ func startUDPServer(addr string, server string) {
 
 		// Send the endpoint info to the Olm server
 		go notifyServer(endpoint, server)
-
-		logger.Info("Received hole punch from %s:%d for Olm ID: %s",
-			remoteAddr.IP,
-			remoteAddr.Port,
-			msg.OlmID)
 	}
 }
 
@@ -160,8 +155,6 @@ func notifyServer(endpoint ClientEndpoint, server string) {
 			string(body))
 		return
 	}
-
-	logger.Info("Successfully notified Olm server about endpoint for ID: %s", endpoint.OlmID)
 }
 
 func main() {
