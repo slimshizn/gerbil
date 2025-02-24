@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -97,7 +98,7 @@ func (s *UDPProxyServer) Start() error {
 	logger.Info("UDP server listening on %s", s.addr)
 
 	// Start a fixed number of worker goroutines.
-	workerCount := 10
+	workerCount := 10 // TODO: Make this configurable or pick it better!
 	for i := 0; i < workerCount; i++ {
 		go s.packetWorker()
 	}
@@ -313,7 +314,7 @@ func (s *UDPProxyServer) notifyServer(endpoint ClientEndpoint) {
 
 func (s *UDPProxyServer) UpdateProxyMapping(sourceIP string, sourcePort int,
 	destinationIP string, destinationPort int) {
-	key := net.JoinHostPort(sourceIP, string(sourcePort))
+	key := net.JoinHostPort(sourceIP, strconv.Itoa(sourcePort))
 	mapping := ProxyMapping{
 		DestinationIP:   destinationIP,
 		DestinationPort: destinationPort,
