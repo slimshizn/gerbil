@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fosrl/gerbil/logger"
@@ -237,16 +239,30 @@ func main() {
 
 	go periodicBandwidthCheck(remoteConfigURL + "/gerbil/receive-bandwidth")
 
+	// Start the UDP proxy server
 	server := relay.NewUDPProxyServer(":21820", remoteConfigURL, key)
 	err = server.Start()
 	if err != nil {
-		logger.Fatal("Failed to start server: %v", err)
+		logger.Fatal("Failed to start UDP proxy server: %v", err)
 	}
 	defer server.Stop()
 
+	// Set up HTTP server
 	http.HandleFunc("/peer", handlePeer)
-	logger.Info("Starting server on %s", listenAddr)
-	logger.Fatal("Failed to start server: %v", http.ListenAndServe(listenAddr, nil))
+	logger.Info("Starting HTTP server on %s", listenAddr)
+
+	// Run HTTP server in a goroutine
+	go func() {
+		if err := http.ListenAndServe(listenAddr, nil); err != nil {
+			logger.Error("HTTP server failed: %v", err)
+		}
+	}()
+
+	// Keep the main goroutine running
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+	logger.Info("Shutting down servers...")
 }
 
 func loadRemoteConfig(url string, key wgtypes.Key, reachableAt string) (WgConfig, error) {
