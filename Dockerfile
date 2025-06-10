@@ -1,4 +1,4 @@
-FROM golang:1.23.1-alpine AS builder
+FROM golang:1.24.3-alpine AS builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -16,7 +16,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /gerbil
 
 # Start a new stage from scratch
-FROM ubuntu:22.04 AS runner
+FROM ubuntu:24.04 AS runner
 
 RUN apt-get update && apt-get install -y iptables iproute2 && rm -rf /var/lib/apt/lists/*
 
