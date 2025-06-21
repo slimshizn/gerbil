@@ -30,6 +30,7 @@ var (
 	mtuInt        int
 	lastReadings  = make(map[string]PeerReading)
 	mu            sync.Mutex
+	notifyURL     string
 )
 
 type WgConfig struct {
@@ -111,6 +112,7 @@ func main() {
 	reachableAt = os.Getenv("REACHABLE_AT")
 	logLevel = os.Getenv("LOG_LEVEL")
 	mtu = os.Getenv("MTU")
+	notifyURL = os.Getenv("NOTIFY_URL")
 
 	if interfaceName == "" {
 		flag.StringVar(&interfaceName, "interface", "wg0", "Name of the WireGuard interface")
@@ -140,6 +142,9 @@ func main() {
 	}
 	if mtu == "" {
 		flag.StringVar(&mtu, "mtu", "1280", "MTU of the WireGuard interface")
+	}
+	if notifyURL == "" {
+		flag.StringVar(&notifyURL, "notify", "", "URL to notify on peer changes")
 	}
 	flag.Parse()
 
@@ -578,6 +583,9 @@ func handleAddPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Notify if notifyURL is set
+	go notifyPeerChange("add", peer.PublicKey)
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "Peer added successfully"})
 }
@@ -628,6 +636,9 @@ func handleRemovePeer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Notify if notifyURL is set
+	go notifyPeerChange("remove", publicKey)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "Peer removed successfully"})
@@ -775,4 +786,29 @@ func reportPeerBandwidth(apiURL string) error {
 	}
 
 	return nil
+}
+
+// notifyPeerChange sends a POST request to notifyURL with the action and public key.
+func notifyPeerChange(action, publicKey string) {
+	if notifyURL == "" {
+		return
+	}
+	payload := map[string]string{
+		"action":    action,
+		"publicKey": publicKey,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		logger.Warn("Failed to marshal notify payload: %v", err)
+		return
+	}
+	resp, err := http.Post(notifyURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		logger.Warn("Failed to notify peer change: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		logger.Warn("Notify server returned non-OK: %s", resp.Status)
+	}
 }
