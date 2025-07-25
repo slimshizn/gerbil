@@ -31,6 +31,7 @@ var (
 	lastReadings  = make(map[string]PeerReading)
 	mu            sync.Mutex
 	notifyURL     string
+	proxyServer   *relay.UDPProxyServer
 )
 
 type WgConfig struct {
@@ -73,6 +74,11 @@ type ClientEndpoint struct {
 type HolePunchMessage struct {
 	OlmID  string `json:"olmId"`
 	NewtID string `json:"newtId"`
+}
+
+type ProxyMappingUpdate struct {
+	OldDestination relay.PeerDestination `json:"oldDestination"`
+	NewDestination relay.PeerDestination `json:"newDestination"`
 }
 
 func parseLogLevel(level string) logger.LogLevel {
@@ -245,15 +251,16 @@ func main() {
 	go periodicBandwidthCheck(remoteConfigURL + "/gerbil/receive-bandwidth")
 
 	// Start the UDP proxy server
-	server := relay.NewUDPProxyServer(":21820", remoteConfigURL, key)
-	err = server.Start()
+	proxyServer = relay.NewUDPProxyServer(":21820", remoteConfigURL, key)
+	err = proxyServer.Start()
 	if err != nil {
 		logger.Fatal("Failed to start UDP proxy server: %v", err)
 	}
-	defer server.Stop()
+	defer proxyServer.Stop()
 
 	// Set up HTTP server
 	http.HandleFunc("/peer", handlePeer)
+	http.HandleFunc("/update-proxy-mapping", handleUpdateProxyMapping)
 	logger.Info("Starting HTTP server on %s", listenAddr)
 
 	// Run HTTP server in a goroutine
@@ -598,12 +605,15 @@ func addPeer(peer Peer) error {
 
 	// parse allowed IPs into array of net.IPNet
 	var allowedIPs []net.IPNet
+	var wgIPs []string
 	for _, ipStr := range peer.AllowedIPs {
 		_, ipNet, err := net.ParseCIDR(ipStr)
 		if err != nil {
 			return fmt.Errorf("failed to parse allowed IP: %v", err)
 		}
 		allowedIPs = append(allowedIPs, *ipNet)
+		// Extract the IP address from the CIDR for relay cleanup
+		wgIPs = append(wgIPs, ipNet.IP.String())
 	}
 
 	peerConfig := wgtypes.PeerConfig{
@@ -617,6 +627,13 @@ func addPeer(peer Peer) error {
 
 	if err := wgClient.ConfigureDevice(interfaceName, config); err != nil {
 		return fmt.Errorf("failed to add peer: %v", err)
+	}
+
+	// Clear relay connections for the peer's WireGuard IPs
+	if proxyServer != nil {
+		for _, wgIP := range wgIPs {
+			proxyServer.OnPeerAdded(wgIP)
+		}
 	}
 
 	logger.Info("Peer %s added successfully", peer.PublicKey)
@@ -650,6 +667,23 @@ func removePeer(publicKey string) error {
 		return fmt.Errorf("failed to parse public key: %v", err)
 	}
 
+	// Get current peer info before removing to clear relay connections
+	var wgIPs []string
+	if proxyServer != nil {
+		device, err := wgClient.Device(interfaceName)
+		if err == nil {
+			for _, peer := range device.Peers {
+				if peer.PublicKey.String() == publicKey {
+					// Extract WireGuard IPs from this peer's allowed IPs
+					for _, allowedIP := range peer.AllowedIPs {
+						wgIPs = append(wgIPs, allowedIP.IP.String())
+					}
+					break
+				}
+			}
+		}
+	}
+
 	peerConfig := wgtypes.PeerConfig{
 		PublicKey: pubKey,
 		Remove:    true,
@@ -663,9 +697,61 @@ func removePeer(publicKey string) error {
 		return fmt.Errorf("failed to remove peer: %v", err)
 	}
 
+	// Clear relay connections for the peer's WireGuard IPs
+	if proxyServer != nil {
+		for _, wgIP := range wgIPs {
+			proxyServer.OnPeerRemoved(wgIP)
+		}
+	}
+
 	logger.Info("Peer %s removed successfully", publicKey)
 
 	return nil
+}
+
+func handleUpdateProxyMapping(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var update ProxyMappingUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to decode request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Validate the update request
+	if update.OldDestination.DestinationIP == "" || update.NewDestination.DestinationIP == "" {
+		http.Error(w, "Both old and new destination IP addresses are required", http.StatusBadRequest)
+		return
+	}
+
+	if update.OldDestination.DestinationPort <= 0 || update.NewDestination.DestinationPort <= 0 {
+		http.Error(w, "Both old and new destination ports must be positive integers", http.StatusBadRequest)
+		return
+	}
+
+	// Update the proxy mappings in the relay server
+	if proxyServer == nil {
+		http.Error(w, "Proxy server is not available", http.StatusInternalServerError)
+		return
+	}
+
+	updatedCount := proxyServer.UpdateDestinationInMappings(update.OldDestination, update.NewDestination)
+
+	logger.Info("Updated %d proxy mappings: %s:%d -> %s:%d",
+		updatedCount,
+		update.OldDestination.DestinationIP, update.OldDestination.DestinationPort,
+		update.NewDestination.DestinationIP, update.NewDestination.DestinationPort)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":         "Proxy mappings updated successfully",
+		"updatedCount":   updatedCount,
+		"oldDestination": update.OldDestination,
+		"newDestination": update.NewDestination,
+	})
 }
 
 func periodicBandwidthCheck(endpoint string) {
