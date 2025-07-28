@@ -4,16 +4,9 @@ Gerbil is a simple [WireGuard](https://www.wireguard.com/) interface management 
 
 ### Installation and Documentation
 
-Gerbil can be used standalone with your own API, a static JSON file, or with Pangolin and Newt as part of the larger system. See documentation below:
+Gerbil works with Pangolin, Newt, and Olm as part of the larger system. See documentation below:
 
--   [Installation Instructions](https://docs.fossorial.io)
 -   [Full Documentation](https://docs.fossorial.io)
-
-## Preview
-
-<img src="public/screenshots/preview.png" alt="Preview"/>
-
-_Sample output of a Gerbil container connected to Pangolin and terminating various peers._
 
 ## Key Functions
 
@@ -29,6 +22,10 @@ Gerbil will create the peers defined in the config on the WireGuard interface. T
 
 Bytes transmitted in and out of each peer are collected every 10 seconds, and incremental usage is reported via the "reportBandwidthTo" endpoint. This can be used to track data usage of each peer on the remote server.
 
+### Handle client relaying
+
+Gerbil listens on port 21820 for incoming UDP hole punch packets to orchestrate NAT hole punching between olm and newt clients. Additionally, it handles relaying data through the gerbil server down to the newt. This is accomplished by scanning each packet for headers and handling them appropriately.   
+
 ## CLI Args
 
 - `reachableAt`: How should the remote server reach Gerbil's API?
@@ -38,10 +35,26 @@ Bytes transmitted in and out of each peer are collected every 10 seconds, and in
 
 Note: You must use either `config` or `remoteConfig` to configure WireGuard.
 
-- `reportBandwidthTo` (optional): Remote HTTP endpoint to send peer bandwidth data
+- `reportBandwidthTo` (optional): **DEPRECATED** - Use `remoteConfig` instead. Remote HTTP endpoint to send peer bandwidth data
 - `interface` (optional): Name of the WireGuard interface created by Gerbil. Default: `wg0`
-- `listen` (optional): Port to listen on for HTTP server. Default: `3003`
-- `log-level` (optional): The log level to use. Default: INFO
+- `listen` (optional): Port to listen on for HTTP server. Default: `:3003`
+- `log-level` (optional): The log level to use (DEBUG, INFO, WARN, ERROR, FATAL). Default: `INFO`
+- `mtu` (optional): MTU of the WireGuard interface. Default: `1280`
+- `notify` (optional): URL to notify on peer changes
+
+## Environment Variables
+
+All CLI arguments can also be provided via environment variables:
+
+- `INTERFACE`: Name of the WireGuard interface
+- `CONFIG`: Path to local configuration file
+- `REMOTE_CONFIG`: URL of the remote config server
+- `LISTEN`: Address to listen on for HTTP server
+- `GENERATE_AND_SAVE_KEY_TO`: Path to save generated private key
+- `REACHABLE_AT`: Endpoint of the HTTP server to tell remote config about
+- `LOG_LEVEL`: Log level (DEBUG, INFO, WARN, ERROR, FATAL)
+- `MTU`: MTU of the WireGuard interface
+- `NOTIFY_URL`: URL to notify on peer changes
 
 Example:
 
@@ -71,6 +84,7 @@ services:
       - SYS_MODULE
     ports:
       - 51820:51820/udp
+      - 21820:21820/udp
 ```
 
 ## Build
