@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -31,12 +30,13 @@ type HolePunchMessage struct {
 }
 
 type ClientEndpoint struct {
-	OlmID     string `json:"olmId"`
-	NewtID    string `json:"newtId"`
-	Token     string `json:"token"`
-	IP        string `json:"ip"`
-	Port      int    `json:"port"`
-	Timestamp int64  `json:"timestamp"`
+	OlmID       string `json:"olmId"`
+	NewtID      string `json:"newtId"`
+	Token       string `json:"token"`
+	IP          string `json:"ip"`
+	Port        int    `json:"port"`
+	Timestamp   int64  `json:"timestamp"`
+	ReachableAt string `json:"reachableAt"`
 }
 
 // Updated to support multiple destination peers
@@ -104,15 +104,18 @@ type UDPProxyServer struct {
 	// Session tracking for WireGuard peers
 	// Key format: "senderIndex:receiverIndex"
 	wgSessions sync.Map
+	// ReachableAt is the URL where this server can be reached
+	ReachableAt string
 }
 
 // NewUDPProxyServer initializes the server with a buffered packet channel.
-func NewUDPProxyServer(addr, serverURL string, privateKey wgtypes.Key) *UDPProxyServer {
+func NewUDPProxyServer(addr, serverURL string, privateKey wgtypes.Key, reachableAt string) *UDPProxyServer {
 	return &UDPProxyServer{
-		addr:       addr,
-		serverURL:  serverURL,
-		privateKey: privateKey,
-		packetChan: make(chan Packet, 1000),
+		addr:        addr,
+		serverURL:   serverURL,
+		privateKey:  privateKey,
+		packetChan:  make(chan Packet, 1000),
+		ReachableAt: reachableAt,
 	}
 }
 
@@ -215,12 +218,13 @@ func (s *UDPProxyServer) packetWorker() {
 			}
 
 			endpoint := ClientEndpoint{
-				NewtID:    msg.NewtID,
-				OlmID:     msg.OlmID,
-				Token:     msg.Token,
-				IP:        packet.remoteAddr.IP.String(),
-				Port:      packet.remoteAddr.Port,
-				Timestamp: time.Now().Unix(),
+				NewtID:      msg.NewtID,
+				OlmID:       msg.OlmID,
+				Token:       msg.Token,
+				IP:          packet.remoteAddr.IP.String(),
+				Port:        packet.remoteAddr.Port,
+				Timestamp:   time.Now().Unix(),
+				ReachableAt: s.ReachableAt,
 			}
 			logger.Debug("Created endpoint from packet remoteAddr %s: IP=%s, Port=%d", packet.remoteAddr.String(), endpoint.IP, endpoint.Port)
 			s.notifyServer(endpoint)
@@ -644,7 +648,7 @@ func (s *UDPProxyServer) notifyServer(endpoint ClientEndpoint) {
 
 // Updated to support multiple destinations
 func (s *UDPProxyServer) UpdateProxyMapping(sourceIP string, sourcePort int, destinations []PeerDestination) {
-	key := net.JoinHostPort(sourceIP, strconv.Itoa(sourcePort))
+	key := fmt.Sprintf("%s:%d", sourceIP, sourcePort)
 	mapping := ProxyMapping{
 		Destinations: destinations,
 		LastUsed:     time.Now(),
