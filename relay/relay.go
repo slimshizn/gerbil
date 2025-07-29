@@ -440,7 +440,7 @@ func (s *UDPProxyServer) handleWireGuardPacket(packet []byte, remoteAddr *net.UD
 
 			_, err = conn.Write(packet)
 			if err != nil {
-				logger.Error("Failed to forward transport data: %v", err)
+				logger.Debug("Failed to forward transport data: %v", err)
 			}
 		} else {
 			// No known session, fall back to forwarding to all peers
@@ -460,7 +460,7 @@ func (s *UDPProxyServer) handleWireGuardPacket(packet []byte, remoteAddr *net.UD
 
 				_, err = conn.Write(packet)
 				if err != nil {
-					logger.Error("Failed to forward transport data: %v", err)
+					logger.Debug("Failed to forward transport data: %v", err)
 				}
 			}
 		}
@@ -524,7 +524,7 @@ func (s *UDPProxyServer) handleResponses(conn *net.UDPConn, destAddr *net.UDPAdd
 	for {
 		n, err := conn.Read(buffer)
 		if err != nil {
-			logger.Error("Error reading response from %s: %v", destAddr.String(), err)
+			logger.Debug("Error reading response from %s: %v", destAddr.String(), err)
 			return
 		}
 
