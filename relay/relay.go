@@ -37,6 +37,7 @@ type ClientEndpoint struct {
 	Port        int    `json:"port"`
 	Timestamp   int64  `json:"timestamp"`
 	ReachableAt string `json:"reachableAt"`
+	PublicKey   string `json:"publicKey"`
 }
 
 // Updated to support multiple destination peers
@@ -225,9 +226,11 @@ func (s *UDPProxyServer) packetWorker() {
 				Port:        packet.remoteAddr.Port,
 				Timestamp:   time.Now().Unix(),
 				ReachableAt: s.ReachableAt,
+				PublicKey:   s.privateKey.PublicKey().String(),
 			}
 			logger.Debug("Created endpoint from packet remoteAddr %s: IP=%s, Port=%d", packet.remoteAddr.String(), endpoint.IP, endpoint.Port)
 			s.notifyServer(endpoint)
+			s.clearSessionsForIP(endpoint.IP) // Clear sessions for this IP to allow re-establishment
 		}
 		// Return the buffer to the pool for reuse.
 		bufferPool.Put(packet.data[:1500])
@@ -355,7 +358,7 @@ func (s *UDPProxyServer) handleWireGuardPacket(packet []byte, remoteAddr *net.UD
 	switch messageType {
 	case WireGuardMessageTypeHandshakeInitiation:
 		// Initial handshake: forward to all peers
-		logger.Debug("Forwarding handshake initiation from %s (sender index: %d)", remoteAddr, senderIndex)
+		logger.Debug("Forwarding handshake initiation from %s (sender index: %d) to peers %v", remoteAddr, senderIndex, proxyMapping.Destinations)
 
 		for _, dest := range proxyMapping.Destinations {
 			destAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", dest.DestinationIP, dest.DestinationPort))
@@ -414,7 +417,7 @@ func (s *UDPProxyServer) handleWireGuardPacket(packet []byte, remoteAddr *net.UD
 
 	case WireGuardMessageTypeTransportData:
 		// Data packet: forward only to the established session peer
-		logger.Debug("Received transport data with receiver index %d from %s", receiverIndex, remoteAddr)
+		// logger.Debug("Received transport data with receiver index %d from %s", receiverIndex, remoteAddr)
 
 		// Look up the session based on the receiver index
 		var destAddr *net.UDPAddr
@@ -660,7 +663,7 @@ func (s *UDPProxyServer) UpdateProxyMapping(sourceIP string, sourcePort int, des
 func (s *UDPProxyServer) OnPeerAdded(wgIP string) {
 	logger.Info("Clearing connections for added peer with WG IP: %s", wgIP)
 	s.clearConnectionsForWGIP(wgIP)
-	s.clearSessionsForWGIP(wgIP)
+	// s.clearSessionsForWGIP(wgIP) THE DEST ADDR IS NOT THE WG IP, SO THIS IS NOT NEEDED
 	// s.clearProxyMappingsForWGIP(wgIP)
 }
 
@@ -668,7 +671,7 @@ func (s *UDPProxyServer) OnPeerAdded(wgIP string) {
 func (s *UDPProxyServer) OnPeerRemoved(wgIP string) {
 	logger.Info("Clearing connections for removed peer with WG IP: %s", wgIP)
 	s.clearConnectionsForWGIP(wgIP)
-	s.clearSessionsForWGIP(wgIP)
+	// s.clearSessionsForWGIP(wgIP) THE DEST ADDR IS NOT THE WG IP, SO THIS IS NOT NEEDED
 	// s.clearProxyMappingsForWGIP(wgIP)
 }
 
@@ -699,7 +702,7 @@ func (s *UDPProxyServer) clearConnectionsForWGIP(wgIP string) {
 }
 
 // clearSessionsForWGIP removes all WireGuard sessions associated with a specific WireGuard IP
-func (s *UDPProxyServer) clearSessionsForWGIP(wgIP string) {
+func (s *UDPProxyServer) clearSessionsForIP(ip string) {
 	var keysToDelete []string
 
 	s.wgSessions.Range(func(key, value interface{}) bool {
@@ -707,9 +710,9 @@ func (s *UDPProxyServer) clearSessionsForWGIP(wgIP string) {
 		session := value.(*WireGuardSession)
 
 		// Check if the session's destination address contains the WG IP
-		if session.DestAddr != nil && session.DestAddr.IP.String() == wgIP {
+		if session.DestAddr != nil && session.DestAddr.IP.String() == ip {
 			keysToDelete = append(keysToDelete, keyStr)
-			logger.Debug("Marking session for deletion for WG IP %s: %s", wgIP, keyStr)
+			logger.Debug("Marking session for deletion for WG IP %s: %s", ip, keyStr)
 		}
 		return true
 	})
@@ -719,7 +722,7 @@ func (s *UDPProxyServer) clearSessionsForWGIP(wgIP string) {
 		s.wgSessions.Delete(key)
 	}
 
-	logger.Info("Cleared %d sessions for WG IP: %s", len(keysToDelete), wgIP)
+	logger.Info("Cleared %d sessions for WG IP: %s", len(keysToDelete), ip)
 }
 
 // // clearProxyMappingsForWGIP removes all proxy mappings that have destinations pointing to a specific WireGuard IP
