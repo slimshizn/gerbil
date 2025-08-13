@@ -265,6 +265,15 @@ func main() {
 	}
 	defer proxyServer.Stop()
 
+	proxySNI, err := NewSNIProxy(*port, config.Sidecar.ExitNodeName, *localProxyAddr, *localProxyPort, localOverrides)
+	if err != nil {
+		logger.Fatal("Failed to create proxy: %v", err)
+	}
+
+	if err := proxySNI.Start(); err != nil {
+		logger.Fatal("Failed to start proxy: %v", err)
+	}
+
 	// Set up HTTP server
 	http.HandleFunc("/peer", handlePeer)
 	http.HandleFunc("/update-proxy-mapping", handleUpdateProxyMapping)
@@ -849,6 +858,26 @@ func handleUpdateDestinations(w http.ResponseWriter, r *http.Request) {
 		"destinationCount": len(request.Destinations),
 		"destinations":     request.Destinations,
 	})
+}
+
+// UpdateLocalSNIsRequest represents the JSON payload for updating local SNIs
+type UpdateLocalSNIsRequest struct {
+	FullDomains []string `json:"fullDomains"`
+}
+
+func handleUpdateLocalSNIs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		logger.Error("Invalid method: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UpdateLocalSNIsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
 }
 
 func periodicBandwidthCheck(endpoint string) {
