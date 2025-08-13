@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"bytes"
@@ -31,16 +31,16 @@ type RouteAPIResponse struct {
 
 // SNIProxy represents the main proxy server
 type SNIProxy struct {
-	port           int
-	cache          *cache.Cache
-	listener       net.Listener
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
-	exitNodeName   string
-	localProxyAddr string
-	localProxyPort int
-	apiBaseURL     string
+	port            int
+	cache           *cache.Cache
+	listener        net.Listener
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	exitNodeName    string
+	localProxyAddr  string
+	localProxyPort  int
+	remoteConfigURL string
 
 	// New fields for fast local SNI lookup
 	localSNIs     map[string]struct{}
@@ -73,7 +73,7 @@ func (conn readOnlyConn) SetReadDeadline(t time.Time) error  { return nil }
 func (conn readOnlyConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // NewSNIProxy creates a new SNI proxy instance
-func NewSNIProxy(port int, exitNodeName, localProxyAddr string, localProxyPort int, apiBaseURL string, localOverrides []string) (*SNIProxy, error) {
+func NewSNIProxy(port int, remoteConfigURL, exitNodeName, localProxyAddr string, localProxyPort int, localOverrides []string) (*SNIProxy, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create local overrides map
@@ -85,17 +85,17 @@ func NewSNIProxy(port int, exitNodeName, localProxyAddr string, localProxyPort i
 	}
 
 	proxy := &SNIProxy{
-		port:           port,
-		cache:          cache.New(3*time.Second, 10*time.Minute),
-		ctx:            ctx,
-		cancel:         cancel,
-		exitNodeName:   exitNodeName,
-		localProxyAddr: localProxyAddr,
-		localProxyPort: localProxyPort,
-		apiBaseURL:     apiBaseURL,
-		localSNIs:      make(map[string]struct{}),
-		localOverrides: overridesMap,
-		activeTunnels:  make(map[string]*activeTunnel),
+		port:            port,
+		cache:           cache.New(3*time.Second, 10*time.Minute),
+		ctx:             ctx,
+		cancel:          cancel,
+		exitNodeName:    exitNodeName,
+		localProxyAddr:  localProxyAddr,
+		localProxyPort:  localProxyPort,
+		remoteConfigURL: remoteConfigURL,
+		localSNIs:       make(map[string]struct{}),
+		localOverrides:  overridesMap,
+		activeTunnels:   make(map[string]*activeTunnel),
 	}
 
 	return proxy, nil
@@ -337,7 +337,7 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 	defer cancel()
 
 	// Construct API URL
-	apiURL := fmt.Sprintf("%s/api/route/%s", p.apiBaseURL, hostname)
+	apiURL := fmt.Sprintf("%s/api/route/%s", p.remoteConfigURL, hostname)
 
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
