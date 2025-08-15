@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fosrl/gerbil/logger"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -109,7 +110,7 @@ func (p *SNIProxy) Start() error {
 	}
 
 	p.listener = listener
-	log.Printf("SNI Proxy listening on port %d", p.port)
+	logger.Debug("SNI Proxy listening on port %d", p.port)
 
 	// Accept connections in a goroutine
 	go p.acceptConnections()
@@ -154,7 +155,7 @@ func (p *SNIProxy) acceptConnections() {
 			case <-p.ctx.Done():
 				return
 			default:
-				log.Printf("Accept error: %v", err)
+				logger.Debug("Accept error: %v", err)
 				continue
 			}
 		}
@@ -209,18 +210,18 @@ func (p *SNIProxy) handleConnection(clientConn net.Conn) {
 	defer p.wg.Done()
 	defer clientConn.Close()
 
-	log.Printf("Accepted connection from %s", clientConn.RemoteAddr())
+	logger.Debug("Accepted connection from %s", clientConn.RemoteAddr())
 
 	// Set read timeout for SNI extraction
 	if err := clientConn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		log.Printf("Failed to set read deadline: %v", err)
+		logger.Debug("Failed to set read deadline: %v", err)
 		return
 	}
 
 	// Extract SNI hostname
 	hostname, clientReader, err := p.extractSNI(clientConn)
 	if err != nil {
-		log.Printf("SNI extraction failed: %v", err)
+		logger.Debug("SNI extraction failed: %v", err)
 		return
 	}
 
@@ -229,40 +230,40 @@ func (p *SNIProxy) handleConnection(clientConn net.Conn) {
 		return
 	}
 
-	log.Printf("SNI hostname detected: %s", hostname)
+	logger.Debug("SNI hostname detected: %s", hostname)
 
 	// Remove read timeout for normal operation
 	if err := clientConn.SetReadDeadline(time.Time{}); err != nil {
-		log.Printf("Failed to clear read deadline: %v", err)
+		logger.Debug("Failed to clear read deadline: %v", err)
 		return
 	}
 
 	// Get routing information
 	route, err := p.getRoute(hostname)
 	if err != nil {
-		log.Printf("Failed to get route for %s: %v", hostname, err)
+		logger.Debug("Failed to get route for %s: %v", hostname, err)
 		return
 	}
 
 	if route == nil {
-		log.Printf("No route found for hostname: %s", hostname)
+		logger.Debug("No route found for hostname: %s", hostname)
 		return
 	}
 
-	log.Printf("Routing %s to %s:%d", hostname, route.TargetHost, route.TargetPort)
+	logger.Debug("Routing %s to %s:%d", hostname, route.TargetHost, route.TargetPort)
 
 	// Connect to target server
 	targetConn, err := net.DialTimeout("tcp",
 		fmt.Sprintf("%s:%d", route.TargetHost, route.TargetPort),
 		10*time.Second)
 	if err != nil {
-		log.Printf("Failed to connect to target %s:%d: %v",
+		logger.Debug("Failed to connect to target %s:%d: %v",
 			route.TargetHost, route.TargetPort, err)
 		return
 	}
 	defer targetConn.Close()
 
-	log.Printf("Connected to target: %s:%d", route.TargetHost, route.TargetPort)
+	logger.Debug("Connected to target: %s:%d", route.TargetHost, route.TargetPort)
 
 	// Track this tunnel by SNI
 	p.activeTunnelsLock.Lock()
@@ -301,7 +302,7 @@ func (p *SNIProxy) handleConnection(clientConn net.Conn) {
 func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 	// Check local overrides first
 	if _, isOverride := p.localOverrides[hostname]; isOverride {
-		log.Printf("Local override matched for hostname: %s", hostname)
+		logger.Debug("Local override matched for hostname: %s", hostname)
 		return &RouteRecord{
 			Hostname:   hostname,
 			TargetHost: p.localProxyAddr,
@@ -326,11 +327,11 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 		if cached == nil {
 			return nil, nil // Cached negative result
 		}
-		log.Printf("Cache hit for hostname: %s", hostname)
+		logger.Debug("Cache hit for hostname: %s", hostname)
 		return cached.(*RouteRecord), nil
 	}
 
-	log.Printf("Cache miss for hostname: %s, querying API", hostname)
+	logger.Debug("Cache miss for hostname: %s, querying API", hostname)
 
 	// Query API with timeout
 	ctx, cancel := context.WithTimeout(p.ctx, 5*time.Second)
@@ -388,7 +389,7 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 
 	// Cache the result
 	p.cache.Set(hostname, route, cache.DefaultExpiration)
-	log.Printf("Cached route for hostname: %s", hostname)
+	logger.Debug("Cached route for hostname: %s", hostname)
 
 	return route, nil
 }
@@ -411,7 +412,7 @@ func (p *SNIProxy) pipe(clientConn, targetConn net.Conn, clientReader io.Reader)
 		buf := make([]byte, 32*1024)
 		_, err := io.CopyBuffer(targetConn, clientReader, buf)
 		if err != nil && err != io.EOF {
-			log.Printf("Copy client->target error: %v", err)
+			logger.Debug("Copy client->target error: %v", err)
 		}
 	}()
 
@@ -428,7 +429,7 @@ func (p *SNIProxy) pipe(clientConn, targetConn net.Conn, clientReader io.Reader)
 		buf := make([]byte, 32*1024)
 		_, err := io.CopyBuffer(clientConn, targetConn, buf)
 		if err != nil && err != io.EOF {
-			log.Printf("Copy target->client error: %v", err)
+			logger.Debug("Copy target->client error: %v", err)
 		}
 	}()
 
@@ -466,6 +467,8 @@ func (p *SNIProxy) UpdateLocalSNIs(fullDomains []string) {
 	p.localSNIs = newSNIs
 	p.localSNIsLock.Unlock()
 
+	logger.Debug("Updated local SNIs, added %d, removed %d", len(newSNIs), len(removed))
+
 	// Terminate tunnels for removed SNIs
 	if len(removed) > 0 {
 		p.activeTunnelsLock.Lock()
@@ -475,7 +478,7 @@ func (p *SNIProxy) UpdateLocalSNIs(fullDomains []string) {
 					conn.Close()
 				}
 				delete(p.activeTunnels, sni)
-				log.Printf("Closed tunnels for SNI target change: %s", sni)
+				logger.Debug("Closed tunnels for SNI target change: %s", sni)
 			}
 		}
 		p.activeTunnelsLock.Unlock()
