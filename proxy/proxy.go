@@ -338,7 +338,7 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 	defer cancel()
 
 	// Construct API URL
-	apiURL := fmt.Sprintf("%s/api/route/%s", p.remoteConfigURL, hostname)
+	apiURL := fmt.Sprintf("%s/gerbil/get-resolved-hostname/%s", p.remoteConfigURL, hostname)
 
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
