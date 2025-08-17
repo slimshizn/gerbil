@@ -28,7 +28,6 @@ type RouteRecord struct {
 // RouteAPIResponse represents the response from the route API
 type RouteAPIResponse struct {
 	Endpoints []string `json:"endpoints"`
-	Name      string   `json:"name"`
 }
 
 // SNIProxy represents the main proxy server
@@ -39,7 +38,6 @@ type SNIProxy struct {
 	ctx             context.Context
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
-	exitNodeName    string
 	localProxyAddr  string
 	localProxyPort  int
 	remoteConfigURL string
@@ -76,7 +74,7 @@ func (conn readOnlyConn) SetReadDeadline(t time.Time) error  { return nil }
 func (conn readOnlyConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // NewSNIProxy creates a new SNI proxy instance
-func NewSNIProxy(port int, remoteConfigURL, publicKey, exitNodeName, localProxyAddr string, localProxyPort int, localOverrides []string) (*SNIProxy, error) {
+func NewSNIProxy(port int, remoteConfigURL, publicKey, localProxyAddr string, localProxyPort int, localOverrides []string) (*SNIProxy, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create local overrides map
@@ -92,7 +90,6 @@ func NewSNIProxy(port int, remoteConfigURL, publicKey, exitNodeName, localProxyA
 		cache:           cache.New(3*time.Second, 10*time.Minute),
 		ctx:             ctx,
 		cancel:          cancel,
-		exitNodeName:    exitNodeName,
 		localProxyAddr:  localProxyAddr,
 		localProxyPort:  localProxyPort,
 		remoteConfigURL: remoteConfigURL,
@@ -386,7 +383,6 @@ func (p *SNIProxy) getRoute(hostname, clientAddr string) (*RouteRecord, error) {
 	}
 
 	endpoints := apiResponse.Endpoints
-	name := apiResponse.Name
 
 	// Default target configuration
 	targetHost := p.localProxyAddr
@@ -395,9 +391,6 @@ func (p *SNIProxy) getRoute(hostname, clientAddr string) (*RouteRecord, error) {
 	// If no endpoints returned, use local node
 	if len(endpoints) == 0 {
 		logger.Debug("No endpoints returned for hostname: %s, using local node", hostname)
-	} else if name == p.exitNodeName {
-		// If the endpoint matches the current exit node, use the local proxy address
-		logger.Debug("Exit node name matches current node (%s), using local proxy", name)
 	} else {
 		// Select endpoint using consistent hashing for stickiness
 		selectedEndpoint := p.selectStickyEndpoint(clientAddr, endpoints)

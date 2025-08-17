@@ -314,7 +314,7 @@ func main() {
 		logger.Info("Local overrides configured: %v", localOverrides)
 	}
 
-	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, "david", localProxyAddr, localProxyPort, localOverrides)
+	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides)
 	if err != nil {
 		logger.Fatal("Failed to create proxy: %v", err)
 	}
