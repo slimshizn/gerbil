@@ -26,8 +26,7 @@ type RouteRecord struct {
 
 // RouteAPIResponse represents the response from the route API
 type RouteAPIResponse struct {
-	Endpoint string `json:"endpoint"`
-	Name     string `json:"name"`
+	Endpoints []string `json:"endpoints"`
 }
 
 // SNIProxy represents the main proxy server
@@ -42,6 +41,7 @@ type SNIProxy struct {
 	localProxyAddr  string
 	localProxyPort  int
 	remoteConfigURL string
+	publicKey       string
 
 	// New fields for fast local SNI lookup
 	localSNIs     map[string]struct{}
@@ -74,7 +74,7 @@ func (conn readOnlyConn) SetReadDeadline(t time.Time) error  { return nil }
 func (conn readOnlyConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // NewSNIProxy creates a new SNI proxy instance
-func NewSNIProxy(port int, remoteConfigURL, exitNodeName, localProxyAddr string, localProxyPort int, localOverrides []string) (*SNIProxy, error) {
+func NewSNIProxy(port int, remoteConfigURL, publicKey, exitNodeName, localProxyAddr string, localProxyPort int, localOverrides []string) (*SNIProxy, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create local overrides map
@@ -94,6 +94,7 @@ func NewSNIProxy(port int, remoteConfigURL, exitNodeName, localProxyAddr string,
 		localProxyAddr:  localProxyAddr,
 		localProxyPort:  localProxyPort,
 		remoteConfigURL: remoteConfigURL,
+		publicKey:       publicKey,
 		localSNIs:       make(map[string]struct{}),
 		localOverrides:  overridesMap,
 		activeTunnels:   make(map[string]*activeTunnel),
@@ -337,14 +338,26 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 	ctx, cancel := context.WithTimeout(p.ctx, 5*time.Second)
 	defer cancel()
 
-	// Construct API URL
-	apiURL := fmt.Sprintf("%s/gerbil/get-resolved-hostname/%s", p.remoteConfigURL, hostname)
+	// Construct API URL (without hostname in path)
+	apiURL := fmt.Sprintf("%s/gerbil/get-resolved-hostname", p.remoteConfigURL)
+
+	// Create request body with hostname and public key
+	requestBody := map[string]string{
+		"hostname":  hostname,
+		"publicKey": p.publicKey,
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	// Make HTTP request
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -370,7 +383,7 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 		return nil, fmt.Errorf("failed to decode API response: %w", err)
 	}
 
-	endpoint := apiResponse.Endpoint
+	endpoints := apiResponse.Endpoints
 	name := apiResponse.Name
 
 	// If the endpoint matches the current exit node, use the local proxy address
@@ -379,7 +392,7 @@ func (p *SNIProxy) getRoute(hostname string) (*RouteRecord, error) {
 	if name == p.exitNodeName {
 		targetHost = p.localProxyAddr
 		targetPort = p.localProxyPort
-	}
+	} // THIS IS SAYING TO ROUTE IT LOCALLY IF IT MATCHES - idk HOW TO KEEP THIS
 
 	route := &RouteRecord{
 		Hostname:   hostname,
