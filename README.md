@@ -62,8 +62,7 @@ Example:
 ./gerbil \
 --reachableAt=http://gerbil:3003 \
 --generateAndSaveKeyTo=/var/config/key \
---remoteConfig=http://pangolin:3001/api/v1/gerbil/get-config \
---reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth
+--remoteConfig=http://pangolin:3001/api/v1/
 ```
 
 ```yaml
@@ -75,8 +74,7 @@ services:
     command:
       - --reachableAt=http://gerbil:3003
       - --generateAndSaveKeyTo=/var/config/key
-      - --remoteConfig=http://pangolin:3001/api/v1/gerbil/get-config
-      - --reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth
+      - --remoteConfig=http://pangolin:3001/api/v1/
     volumes:
       - ./config/:/var/config
     cap_add:
