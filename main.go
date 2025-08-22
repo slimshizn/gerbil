@@ -190,7 +190,7 @@ func main() {
 		}
 	}
 	if localProxyPortStr == "" {
-		flag.IntVar(&localProxyPort, "local-proxy-port", 9443, "Local proxy port")
+		flag.IntVar(&localProxyPort, "local-proxy-port", 443, "Local proxy port")
 	}
 	if localOverridesStr != "" {
 		flag.StringVar(&localOverridesStr, "local-overrides", "", "Comma-separated list of local overrides for SNI proxy")
