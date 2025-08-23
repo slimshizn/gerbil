@@ -1,11 +1,10 @@
 module github.com/fosrl/gerbil
 
-go 1.23.1
-
-toolchain go1.23.2
+go 1.25
 
 require (
 	github.com/vishvananda/netlink v1.3.1
+	golang.org/x/crypto v0.36.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
 )
 
@@ -17,7 +16,6 @@ require (
 	github.com/mdlayher/socket v0.4.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
