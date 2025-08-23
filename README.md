@@ -24,7 +24,18 @@ Bytes transmitted in and out of each peer are collected every 10 seconds, and in
 
 ### Handle client relaying
 
-Gerbil listens on port 21820 for incoming UDP hole punch packets to orchestrate NAT hole punching between olm and newt clients. Additionally, it handles relaying data through the gerbil server down to the newt. This is accomplished by scanning each packet for headers and handling them appropriately.   
+Gerbil listens on port 21820 for incoming UDP hole punch packets to orchestrate NAT hole punching between olm and newt clients. Additionally, it handles relaying data through the gerbil server down to the newt. This is accomplished by scanning each packet for headers and handling them appropriately.
+
+### SNI Proxy
+
+Gerbil includes an SNI (Server Name Indication) proxy that enables intelligent routing of HTTPS traffic between Pangolin nodes. When a TLS connection comes in, the proxy extracts the hostname from the SNI extension and queries Pangolin to determine the correct routing destination. This allows seamless routing of web traffic through the WireGuard mesh network:
+
+- If the hostname is configured for local handling (via local overrides or local SNIs), traffic is routed to the local proxy
+- Otherwise, the proxy queries Pangolin's routing API to determine which node should handle the traffic
+- Supports caching of routing decisions to improve performance
+- Handles connection pooling and graceful shutdown
+
+In single node (self hosted) Pangolin deployments this can be bypassed by using port 443:443 to route to Traefik instead of the SNI proxy at 8443.
 
 ## CLI Args
 
@@ -41,6 +52,10 @@ Note: You must use either `config` or `remoteConfig` to configure WireGuard.
 - `log-level` (optional): The log level to use (DEBUG, INFO, WARN, ERROR, FATAL). Default: `INFO`
 - `mtu` (optional): MTU of the WireGuard interface. Default: `1280`
 - `notify` (optional): URL to notify on peer changes
+- `sni-port` (optional): Port for the SNI proxy to listen on. Default: `8443`
+- `local-proxy` (optional): Address for local proxy when routing local traffic. Default: `localhost`
+- `local-proxy-port` (optional): Port for local proxy when routing local traffic. Default: `443`
+- `local-overrides` (optional): Comma-separated list of domain names that should always be routed to the local proxy
 
 ## Environment Variables
 
@@ -55,6 +70,10 @@ All CLI arguments can also be provided via environment variables:
 - `LOG_LEVEL`: Log level (DEBUG, INFO, WARN, ERROR, FATAL)
 - `MTU`: MTU of the WireGuard interface
 - `NOTIFY_URL`: URL to notify on peer changes
+- `SNI_PORT`: Port for the SNI proxy to listen on
+- `LOCAL_PROXY`: Address for local proxy when routing local traffic
+- `LOCAL_PROXY_PORT`: Port for local proxy when routing local traffic
+- `LOCAL_OVERRIDES`: Comma-separated list of domain names that should always be routed to the local proxy
 
 Example:
 
@@ -83,6 +102,7 @@ services:
     ports:
       - 51820:51820/udp
       - 21820:21820/udp
+      - 443:8443/tcp  # SNI proxy port
 ```
 
 ## Build
