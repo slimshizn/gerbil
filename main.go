@@ -121,6 +121,7 @@ func main() {
 		localProxyAddr       string
 		localProxyPort       int
 		localOverridesStr    string
+		proxyProtocol        bool
 	)
 
 	interfaceName = os.Getenv("INTERFACE")
@@ -137,6 +138,7 @@ func main() {
 	localProxyAddr = os.Getenv("LOCAL_PROXY")
 	localProxyPortStr := os.Getenv("LOCAL_PROXY_PORT")
 	localOverridesStr = os.Getenv("LOCAL_OVERRIDES")
+	proxyProtocolStr := os.Getenv("PROXY_PROTOCOL")
 
 	if interfaceName == "" {
 		flag.StringVar(&interfaceName, "interface", "wg0", "Name of the WireGuard interface")
@@ -194,6 +196,13 @@ func main() {
 	}
 	if localOverridesStr != "" {
 		flag.StringVar(&localOverridesStr, "local-overrides", "", "Comma-separated list of local overrides for SNI proxy")
+	}
+
+	if proxyProtocolStr != "" {
+		proxyProtocol = strings.ToLower(proxyProtocolStr) == "true"
+	}
+	if proxyProtocolStr == "" {
+		flag.BoolVar(&proxyProtocol, "proxy-protocol", true, "Enable PROXY protocol v1 for preserving client IP")
 	}
 
 	flag.Parse()
@@ -314,7 +323,7 @@ func main() {
 		logger.Info("Local overrides configured: %v", localOverrides)
 	}
 
-	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides)
+	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides, proxyProtocol)
 	if err != nil {
 		logger.Fatal("Failed to create proxy: %v", err)
 	}

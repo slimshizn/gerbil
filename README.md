@@ -34,6 +34,9 @@ Gerbil includes an SNI (Server Name Indication) proxy that enables intelligent r
 - Otherwise, the proxy queries Pangolin's routing API to determine which node should handle the traffic
 - Supports caching of routing decisions to improve performance
 - Handles connection pooling and graceful shutdown
+- Optional PROXY protocol v1 support to preserve original client IP addresses when forwarding to downstream proxies (HAProxy, Nginx, etc.)
+
+The PROXY protocol allows downstream proxies to know the real client IP address instead of seeing the SNI proxy's IP. When enabled with `--proxy-protocol`, the SNI proxy will prepend a PROXY protocol header to each connection containing the original client's IP and port information.
 
 In single node (self hosted) Pangolin deployments this can be bypassed by using port 443:443 to route to Traefik instead of the SNI proxy at 8443.
 
@@ -56,6 +59,7 @@ Note: You must use either `config` or `remoteConfig` to configure WireGuard.
 - `local-proxy` (optional): Address for local proxy when routing local traffic. Default: `localhost`
 - `local-proxy-port` (optional): Port for local proxy when routing local traffic. Default: `443`
 - `local-overrides` (optional): Comma-separated list of domain names that should always be routed to the local proxy
+- `proxy-protocol` (optional): Enable PROXY protocol v1 for preserving client IP addresses when forwarding to downstream proxies. Default: `false`
 
 ## Environment Variables
 
@@ -74,6 +78,7 @@ All CLI arguments can also be provided via environment variables:
 - `LOCAL_PROXY`: Address for local proxy when routing local traffic
 - `LOCAL_PROXY_PORT`: Port for local proxy when routing local traffic
 - `LOCAL_OVERRIDES`: Comma-separated list of domain names that should always be routed to the local proxy
+- `PROXY_PROTOCOL`: Enable PROXY protocol v1 for preserving client IP addresses (true/false)
 
 Example:
 
