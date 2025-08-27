@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,7 @@ type SNIProxy struct {
 	localProxyPort  int
 	remoteConfigURL string
 	publicKey       string
+	proxyProtocol   bool // Enable PROXY protocol v1
 
 	// New fields for fast local SNI lookup
 	localSNIs     map[string]struct{}
@@ -73,8 +75,63 @@ func (conn readOnlyConn) SetDeadline(t time.Time) error      { return nil }
 func (conn readOnlyConn) SetReadDeadline(t time.Time) error  { return nil }
 func (conn readOnlyConn) SetWriteDeadline(t time.Time) error { return nil }
 
+// buildProxyProtocolHeader creates a PROXY protocol v1 header
+func buildProxyProtocolHeader(clientAddr, targetAddr net.Addr) string {
+	clientTCP, ok := clientAddr.(*net.TCPAddr)
+	if !ok {
+		// Fallback for unknown address types
+		return "PROXY UNKNOWN\r\n"
+	}
+
+	targetTCP, ok := targetAddr.(*net.TCPAddr)
+	if !ok {
+		// Fallback for unknown address types
+		return "PROXY UNKNOWN\r\n"
+	}
+
+	// Determine protocol family based on client IP and normalize target IP accordingly
+	var protocol string
+	var targetIP string
+
+	if clientTCP.IP.To4() != nil {
+		// Client is IPv4, use TCP4 protocol
+		protocol = "TCP4"
+		if targetTCP.IP.To4() != nil {
+			// Target is also IPv4, use as-is
+			targetIP = targetTCP.IP.String()
+		} else {
+			// Target is IPv6, but we need IPv4 for consistent protocol family
+			// Use the IPv4 loopback if target is IPv6 loopback, otherwise use 127.0.0.1
+			if targetTCP.IP.IsLoopback() {
+				targetIP = "127.0.0.1"
+			} else {
+				// For non-loopback IPv6 targets, we could try to extract embedded IPv4
+				// or fall back to a sensible IPv4 address based on the target
+				targetIP = "127.0.0.1" // Safe fallback
+			}
+		}
+	} else {
+		// Client is IPv6, use TCP6 protocol
+		protocol = "TCP6"
+		if targetTCP.IP.To4() != nil {
+			// Target is IPv4, convert to IPv6 representation
+			targetIP = "::ffff:" + targetTCP.IP.String()
+		} else {
+			// Target is also IPv6, use as-is
+			targetIP = targetTCP.IP.String()
+		}
+	}
+
+	return fmt.Sprintf("PROXY %s %s %s %d %d\r\n",
+		protocol,
+		clientTCP.IP.String(),
+		targetIP,
+		clientTCP.Port,
+		targetTCP.Port)
+}
+
 // NewSNIProxy creates a new SNI proxy instance
-func NewSNIProxy(port int, remoteConfigURL, publicKey, localProxyAddr string, localProxyPort int, localOverrides []string) (*SNIProxy, error) {
+func NewSNIProxy(port int, remoteConfigURL, publicKey, localProxyAddr string, localProxyPort int, localOverrides []string, proxyProtocol bool) (*SNIProxy, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Create local overrides map
@@ -94,6 +151,7 @@ func NewSNIProxy(port int, remoteConfigURL, publicKey, localProxyAddr string, lo
 		localProxyPort:  localProxyPort,
 		remoteConfigURL: remoteConfigURL,
 		publicKey:       publicKey,
+		proxyProtocol:   proxyProtocol,
 		localSNIs:       make(map[string]struct{}),
 		localOverrides:  overridesMap,
 		activeTunnels:   make(map[string]*activeTunnel),
@@ -264,6 +322,17 @@ func (p *SNIProxy) handleConnection(clientConn net.Conn) {
 	defer targetConn.Close()
 
 	logger.Debug("Connected to target: %s:%d", route.TargetHost, route.TargetPort)
+
+	// Send PROXY protocol header if enabled
+	if p.proxyProtocol {
+		proxyHeader := buildProxyProtocolHeader(clientConn.RemoteAddr(), targetConn.LocalAddr())
+		logger.Debug("Sending PROXY protocol header: %s", strings.TrimSpace(proxyHeader))
+
+		if _, err := targetConn.Write([]byte(proxyHeader)); err != nil {
+			logger.Debug("Failed to send PROXY protocol header: %v", err)
+			return
+		}
+	}
 
 	// Track this tunnel by SNI
 	p.activeTunnelsLock.Lock()
