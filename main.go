@@ -150,7 +150,7 @@ func main() {
 		flag.StringVar(&remoteConfigURL, "remoteConfig", "", "URL of the Pangolin server")
 	}
 	if listenAddr == "" {
-		flag.StringVar(&listenAddr, "listen", ":3003", "Address to listen on")
+		flag.StringVar(&listenAddr, "listen", ":3004", "Address to listen on")
 	}
 	// DEPRECATED AND UNSED: reportBandwidthTo
 	// allow reportBandwidthTo to be passed but dont do anything with it just thow it away
