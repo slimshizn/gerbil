@@ -121,6 +121,7 @@ func main() {
 		localProxyAddr       string
 		localProxyPort       int
 		localOverridesStr    string
+		trustedUpstreamsStr  string
 		proxyProtocol        bool
 	)
 
@@ -138,6 +139,7 @@ func main() {
 	localProxyAddr = os.Getenv("LOCAL_PROXY")
 	localProxyPortStr := os.Getenv("LOCAL_PROXY_PORT")
 	localOverridesStr = os.Getenv("LOCAL_OVERRIDES")
+	trustedUpstreamsStr = os.Getenv("TRUSTED_UPSTREAMS")
 	proxyProtocolStr := os.Getenv("PROXY_PROTOCOL")
 
 	if interfaceName == "" {
@@ -196,6 +198,9 @@ func main() {
 	}
 	if localOverridesStr != "" {
 		flag.StringVar(&localOverridesStr, "local-overrides", "", "Comma-separated list of local overrides for SNI proxy")
+	}
+	if trustedUpstreamsStr == "" {
+		flag.StringVar(&trustedUpstreamsStr, "trusted-upstreams", "", "Comma-separated list of trusted upstream proxy domain names/IPs that can send PROXY protocol")
 	}
 
 	if proxyProtocolStr != "" {
@@ -323,7 +328,16 @@ func main() {
 		logger.Info("Local overrides configured: %v", localOverrides)
 	}
 
-	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides, proxyProtocol)
+	var trustedUpstreams []string
+	if trustedUpstreamsStr != "" {
+		trustedUpstreams = strings.Split(trustedUpstreamsStr, ",")
+		for i, upstream := range trustedUpstreams {
+			trustedUpstreams[i] = strings.TrimSpace(upstream)
+		}
+		logger.Info("Trusted upstreams configured: %v", trustedUpstreams)
+	}
+
+	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides, proxyProtocol, trustedUpstreams)
 	if err != nil {
 		logger.Fatal("Failed to create proxy: %v", err)
 	}
