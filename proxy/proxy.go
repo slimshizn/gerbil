@@ -114,13 +114,34 @@ func (p *SNIProxy) parseProxyProtocolHeader(conn net.Conn) (*ProxyProtocolInfo, 
 	buffer := make([]byte, 512) // PROXY protocol header should be much smaller
 	n, err := conn.Read(buffer)
 	if err != nil {
-		return nil, conn, fmt.Errorf("failed to read PROXY protocol header: %w", err)
+		// If we can't read from trusted upstream, treat as regular connection
+		logger.Debug("Could not read from trusted upstream %s, treating as regular connection: %v", remoteHost, err)
+		// Clear read timeout before returning
+		if clearErr := conn.SetReadDeadline(time.Time{}); clearErr != nil {
+			logger.Debug("Failed to clear read deadline: %v", clearErr)
+		}
+		return nil, conn, nil
 	}
 
 	// Find the end of the first line (CRLF)
 	headerEnd := bytes.Index(buffer[:n], []byte("\r\n"))
 	if headerEnd == -1 {
-		return nil, conn, fmt.Errorf("PROXY protocol header not found")
+		// No PROXY protocol header found, treat as regular TLS connection
+		// Return the connection with the buffered data prepended
+		logger.Debug("No PROXY protocol header from trusted upstream %s, treating as regular TLS connection", remoteHost)
+
+		// Clear read timeout
+		if err := conn.SetReadDeadline(time.Time{}); err != nil {
+			logger.Debug("Failed to clear read deadline: %v", err)
+		}
+
+		// Create a reader that includes the buffered data + original connection
+		newReader := io.MultiReader(bytes.NewReader(buffer[:n]), conn)
+		wrappedConn := &proxyProtocolConn{
+			Conn:   conn,
+			reader: newReader,
+		}
+		return nil, wrappedConn, nil
 	}
 
 	headerLine := string(buffer[:headerEnd])
@@ -134,7 +155,21 @@ func (p *SNIProxy) parseProxyProtocolHeader(conn net.Conn) (*ProxyProtocolInfo, 
 			// PROXY UNKNOWN - use original connection info
 			return nil, conn, nil
 		}
-		return nil, conn, fmt.Errorf("invalid PROXY protocol header: %s", headerLine)
+		// Invalid PROXY protocol, but might be regular TLS - treat as such
+		logger.Debug("Invalid PROXY protocol from trusted upstream %s, treating as regular TLS connection: %s", remoteHost, headerLine)
+
+		// Clear read timeout
+		if err := conn.SetReadDeadline(time.Time{}); err != nil {
+			logger.Debug("Failed to clear read deadline: %v", err)
+		}
+
+		// Return the connection with all buffered data prepended
+		newReader := io.MultiReader(bytes.NewReader(buffer[:n]), conn)
+		wrappedConn := &proxyProtocolConn{
+			Conn:   conn,
+			reader: newReader,
+		}
+		return nil, wrappedConn, nil
 	}
 
 	protocol := parts[1]
@@ -468,6 +503,10 @@ func (p *SNIProxy) handleConnection(clientConn net.Conn) {
 		if proxyInfo != nil {
 			logger.Debug("Received PROXY protocol from trusted upstream: %s:%d -> %s:%d",
 				proxyInfo.SrcIP, proxyInfo.SrcPort, proxyInfo.DestIP, proxyInfo.DestPort)
+		} else {
+			// No PROXY protocol detected, but connection is from trusted upstream
+			// This is fine - treat as regular connection
+			logger.Debug("No PROXY protocol detected from trusted upstream, treating as regular connection")
 		}
 	}
 
