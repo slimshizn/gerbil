@@ -20,7 +20,7 @@ Gerbil will create the peers defined in the config on the WireGuard interface. T
 
 ### Report Bandwidth
 
-Bytes transmitted in and out of each peer are collected every 10 seconds, and incremental usage is reported via the "reportBandwidthTo" endpoint. This can be used to track data usage of each peer on the remote server.
+Bytes transmitted in and out of each peer are collected every 10 seconds, and incremental usage is reported via the api endpoint. This can be used to track data usage of each peer on the remote server.
 
 ### Handle client relaying
 

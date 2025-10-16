@@ -165,22 +165,6 @@ func main() {
 
 	if reachableAt == "" {
 		flag.StringVar(&reachableAt, "reachableAt", "", "Endpoint of the http server to tell remote config about")
-
-		// try to parse as http://host:port and set the listenAddr to the :port from this reachableAt.
-		if reachableAt != "" && listenAddr == "" {
-			if strings.HasPrefix(reachableAt, "http://") || strings.HasPrefix(reachableAt, "https://") {
-				parts := strings.Split(reachableAt, ":")
-				if len(parts) == 3 {
-					port := parts[2]
-					if strings.Contains(port, "/") {
-						port = strings.Split(port, "/")[0]
-					}
-					listenAddr = ":" + port
-				}
-			}
-		} else if listenAddr == "" {
-			listenAddr = ":3003"
-		}
 	}
 
 	if logLevel == "" {
@@ -232,6 +216,22 @@ func main() {
 
 	logger.Init()
 	logger.GetLogger().SetLevel(parseLogLevel(logLevel))
+
+	// try to parse as http://host:port and set the listenAddr to the :port from this reachableAt.
+	if reachableAt != "" && listenAddr == "" {
+		if strings.HasPrefix(reachableAt, "http://") || strings.HasPrefix(reachableAt, "https://") {
+			parts := strings.Split(reachableAt, ":")
+			if len(parts) == 3 {
+				port := parts[2]
+				if strings.Contains(port, "/") {
+					port = strings.Split(port, "/")[0]
+				}
+				listenAddr = ":" + port
+			}
+		}
+	} else if listenAddr == "" {
+		listenAddr = ":3003"
+	}
 
 	mtuInt, err = strconv.Atoi(mtu)
 	if err != nil {
