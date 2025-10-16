@@ -152,7 +152,7 @@ func main() {
 		flag.StringVar(&remoteConfigURL, "remoteConfig", "", "URL of the Pangolin server")
 	}
 	if listenAddr == "" {
-		flag.StringVar(&listenAddr, "listen", ":3003", "Address to listen on")
+		flag.StringVar(&listenAddr, "listen", "", "DEPRECATED (overridden by reachableAt): Address to listen on")
 	}
 	// DEPRECATED AND UNSED: reportBandwidthTo
 	// allow reportBandwidthTo to be passed but dont do anything with it just thow it away
@@ -162,9 +162,27 @@ func main() {
 	if generateAndSaveKeyTo == "" {
 		flag.StringVar(&generateAndSaveKeyTo, "generateAndSaveKeyTo", "", "Path to save generated private key")
 	}
+
 	if reachableAt == "" {
 		flag.StringVar(&reachableAt, "reachableAt", "", "Endpoint of the http server to tell remote config about")
+
+		// try to parse as http://host:port and set the listenAddr to the :port from this reachableAt.
+		if reachableAt != "" && listenAddr == "" {
+			if strings.HasPrefix(reachableAt, "http://") || strings.HasPrefix(reachableAt, "https://") {
+				parts := strings.Split(reachableAt, ":")
+				if len(parts) == 3 {
+					port := parts[2]
+					if strings.Contains(port, "/") {
+						port = strings.Split(port, "/")[0]
+					}
+					listenAddr = ":" + port
+				}
+			}
+		} else if listenAddr == "" {
+			listenAddr = ":3003"
+		}
 	}
+
 	if logLevel == "" {
 		flag.StringVar(&logLevel, "log-level", "INFO", "Log level (DEBUG, INFO, WARN, ERROR, FATAL)")
 	}
