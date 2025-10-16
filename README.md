@@ -51,7 +51,7 @@ Note: You must use either `config` or `remoteConfig` to configure WireGuard.
 
 - `reportBandwidthTo` (optional): **DEPRECATED** - Use `remoteConfig` instead. Remote HTTP endpoint to send peer bandwidth data
 - `interface` (optional): Name of the WireGuard interface created by Gerbil. Default: `wg0`
-- `listen` (optional): Port to listen on for HTTP server. Default: `:3003`
+- `listen` (optional): Port to listen on for HTTP server. Default: `:3004`
 - `log-level` (optional): The log level to use (DEBUG, INFO, WARN, ERROR, FATAL). Default: `INFO`
 - `mtu` (optional): MTU of the WireGuard interface. Default: `1280`
 - `notify` (optional): URL to notify on peer changes
@@ -84,7 +84,7 @@ Example:
 
 ```bash
 ./gerbil \
---reachableAt=http://gerbil:3003 \
+--reachableAt=http://gerbil:3004 \
 --generateAndSaveKeyTo=/var/config/key \
 --remoteConfig=http://pangolin:3001/api/v1/
 ```
