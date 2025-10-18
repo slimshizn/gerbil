@@ -96,7 +96,7 @@ services:
     container_name: gerbil
     restart: unless-stopped
     command:
-      - --reachableAt=http://gerbil:3003
+      - --reachableAt=http://gerbil:3004
       - --generateAndSaveKeyTo=/var/config/key
       - --remoteConfig=http://pangolin:3001/api/v1/
     volumes:
