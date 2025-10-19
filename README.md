@@ -6,7 +6,7 @@ Gerbil is a simple [WireGuard](https://www.wireguard.com/) interface management 
 
 Gerbil works with Pangolin, Newt, and Olm as part of the larger system. See documentation below:
 
--   [Full Documentation](https://docs.fossorial.io)
+-   [Full Documentation](https://docs.pangolin.net)
 
 ## Key Functions
 
