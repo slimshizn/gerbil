@@ -6,7 +6,7 @@ Gerbil is a simple [WireGuard](https://www.wireguard.com/) interface management 
 
 Gerbil works with Pangolin, Newt, and Olm as part of the larger system. See documentation below:
 
--   [Full Documentation](https://docs.fossorial.io)
+-   [Full Documentation](https://docs.pangolin.net)
 
 ## Key Functions
 
@@ -20,7 +20,7 @@ Gerbil will create the peers defined in the config on the WireGuard interface. T
 
 ### Report Bandwidth
 
-Bytes transmitted in and out of each peer are collected every 10 seconds, and incremental usage is reported via the "reportBandwidthTo" endpoint. This can be used to track data usage of each peer on the remote server.
+Bytes transmitted in and out of each peer are collected every 10 seconds, and incremental usage is reported via the api endpoint. This can be used to track data usage of each peer on the remote server.
 
 ### Handle client relaying
 
@@ -96,7 +96,7 @@ services:
     container_name: gerbil
     restart: unless-stopped
     command:
-      - --reachableAt=http://gerbil:3003
+      - --reachableAt=http://gerbil:3004
       - --generateAndSaveKeyTo=/var/config/key
       - --remoteConfig=http://pangolin:3001/api/v1/
     volumes:

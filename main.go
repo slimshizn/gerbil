@@ -121,6 +121,7 @@ func main() {
 		localProxyAddr       string
 		localProxyPort       int
 		localOverridesStr    string
+		trustedUpstreamsStr  string
 		proxyProtocol        bool
 	)
 
@@ -138,6 +139,7 @@ func main() {
 	localProxyAddr = os.Getenv("LOCAL_PROXY")
 	localProxyPortStr := os.Getenv("LOCAL_PROXY_PORT")
 	localOverridesStr = os.Getenv("LOCAL_OVERRIDES")
+	trustedUpstreamsStr = os.Getenv("TRUSTED_UPSTREAMS")
 	proxyProtocolStr := os.Getenv("PROXY_PROTOCOL")
 
 	if interfaceName == "" {
@@ -150,7 +152,7 @@ func main() {
 		flag.StringVar(&remoteConfigURL, "remoteConfig", "", "URL of the Pangolin server")
 	}
 	if listenAddr == "" {
-		flag.StringVar(&listenAddr, "listen", ":3004", "Address to listen on")
+		flag.StringVar(&listenAddr, "listen", "", "DEPRECATED (overridden by reachableAt): Address to listen on")
 	}
 	// DEPRECATED AND UNSED: reportBandwidthTo
 	// allow reportBandwidthTo to be passed but dont do anything with it just thow it away
@@ -160,9 +162,11 @@ func main() {
 	if generateAndSaveKeyTo == "" {
 		flag.StringVar(&generateAndSaveKeyTo, "generateAndSaveKeyTo", "", "Path to save generated private key")
 	}
+
 	if reachableAt == "" {
 		flag.StringVar(&reachableAt, "reachableAt", "", "Endpoint of the http server to tell remote config about")
 	}
+
 	if logLevel == "" {
 		flag.StringVar(&logLevel, "log-level", "INFO", "Log level (DEBUG, INFO, WARN, ERROR, FATAL)")
 	}
@@ -197,6 +201,9 @@ func main() {
 	if localOverridesStr != "" {
 		flag.StringVar(&localOverridesStr, "local-overrides", "", "Comma-separated list of local overrides for SNI proxy")
 	}
+	if trustedUpstreamsStr == "" {
+		flag.StringVar(&trustedUpstreamsStr, "trusted-upstreams", "", "Comma-separated list of trusted upstream proxy domain names/IPs that can send PROXY protocol")
+	}
 
 	if proxyProtocolStr != "" {
 		proxyProtocol = strings.ToLower(proxyProtocolStr) == "true"
@@ -209,6 +216,22 @@ func main() {
 
 	logger.Init()
 	logger.GetLogger().SetLevel(parseLogLevel(logLevel))
+
+	// try to parse as http://host:port and set the listenAddr to the :port from this reachableAt.
+	if reachableAt != "" && listenAddr == "" {
+		if strings.HasPrefix(reachableAt, "http://") || strings.HasPrefix(reachableAt, "https://") {
+			parts := strings.Split(reachableAt, ":")
+			if len(parts) == 3 {
+				port := parts[2]
+				if strings.Contains(port, "/") {
+					port = strings.Split(port, "/")[0]
+				}
+				listenAddr = ":" + port
+			}
+		}
+	} else if listenAddr == "" {
+		listenAddr = ":3003"
+	}
 
 	mtuInt, err = strconv.Atoi(mtu)
 	if err != nil {
@@ -323,7 +346,16 @@ func main() {
 		logger.Info("Local overrides configured: %v", localOverrides)
 	}
 
-	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides, proxyProtocol)
+	var trustedUpstreams []string
+	if trustedUpstreamsStr != "" {
+		trustedUpstreams = strings.Split(trustedUpstreamsStr, ",")
+		for i, upstream := range trustedUpstreams {
+			trustedUpstreams[i] = strings.TrimSpace(upstream)
+		}
+		logger.Info("Trusted upstreams configured: %v", trustedUpstreams)
+	}
+
+	proxySNI, err = proxy.NewSNIProxy(sniProxyPort, remoteConfigURL, key.PublicKey().String(), localProxyAddr, localProxyPort, localOverrides, proxyProtocol, trustedUpstreams)
 	if err != nil {
 		logger.Fatal("Failed to create proxy: %v", err)
 	}
